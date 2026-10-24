@@ -1,0 +1,43 @@
+allprojects {
+    configurations.all {
+        resolutionStrategy.eachDependency { details ->
+            def r = details.requested
+            if (r.group == 'org.jetbrains.kotlin' && (r.name == 'kotlin-stdlib-jdk7' || r.name == 'kotlin-stdlib-jdk8') && r.version != null) {
+                details.useTarget("org.jetbrains.kotlin:kotlin-stdlib:${r.version}")
+                details.because('merged into kotlin-stdlib since Kotlin 1.8')
+            }
+        }
+    }
+    afterEvaluate { p ->
+        def androidExt = p.extensions.findByName('android')
+        if (androidExt != null && p.plugins.hasPlugin('com.android.application')) {
+            def ks = new File(p.rootProject.projectDir, 'pure-debug.keystore')
+            if (ks.exists()) {
+                def cfg = androidExt.signingConfigs.maybeCreate('debug')
+                cfg.storeFile = ks
+                cfg.storePassword = 'android'
+                cfg.keyAlias = 'androiddebugkey'
+                cfg.keyPassword = 'android'
+            }
+            def vc = System.getenv('PURE_VERSION_CODE')
+            if (vc != null && vc.isInteger()) {
+                androidExt.defaultConfig.versionCode = vc.toInteger()
+            }
+            def playKs = new File(p.rootProject.projectDir, 'play-release.keystore')
+            def playProps = new File(p.rootProject.projectDir, 'play-release-key.properties')
+            if (playKs.exists() && playProps.exists()) {
+                def props = new Properties()
+                playProps.withInputStream { props.load(it) }
+                def rcfg = androidExt.signingConfigs.maybeCreate('release')
+                rcfg.storeFile = playKs
+                rcfg.storePassword = props.getProperty('storePassword')
+                rcfg.keyAlias = props.getProperty('keyAlias')
+                rcfg.keyPassword = props.getProperty('keyPassword')
+                def rel = androidExt.buildTypes.findByName('release')
+                if (rel != null) {
+                    rel.signingConfig = rcfg
+                }
+            }
+        }
+    }
+}
